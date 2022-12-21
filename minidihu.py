@@ -8,6 +8,7 @@ import scipy.sparse.linalg
 from functools import lru_cache
 import matplotlib.pyplot as plt
 from mycg import mycg
+import pandas as pd
 
 ############################################################################################
 # auxiliary methods
@@ -401,11 +402,11 @@ def crank_nicolson_FE_step(Vmhn0, sys_expl_impl, t, ht, error_est=None, maxit=10
 
     lhs = cn_sys_impl(ht,Nx)
     rhs = cn_sys_expl(ht,Nx)
-    Vmhn0[1:-1,0], exit_code, iters, e_ests = mycg(lhs, rhs, V0[1:-1], t, maxiter=maxit, tol=eps, convcontrol=error_est)        #V1
-    print('exit_code=',exit_code,'CG Iterations',iters,'t=',t)
+    Vmhn0[1:-1,0], exit_code, iters, e_ests, residuals, sample1, sample2 = mycg(lhs, rhs, V0[1:-1], t, maxiter=maxit, tol=eps, convcontrol=error_est)        #V1
+    print('\rexit_code = ' + str(exit_code) + '   CG Iterations = ' + str(iters) + '   t = ' + str(t), end='', flush=True)
     Vmhn0[0,0] = Vmhn0[1,0]
     Vmhn0[-1,0] = Vmhn0[-2,0]
-    return Vmhn0, iters, e_ests
+    return Vmhn0, iters, e_ests, residuals, sample1, sample2
 
 def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
     Vmhn = Vmhn0
@@ -421,17 +422,25 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
     iters_list = []
     e_iters = []
     e_discs = []
+    sample0s = []
+    sample1s = []
+    res_trajectory = []
+    print('Starting solver...')
     for i in range(n_steps):
         #print(i, '/', n_steps, 'timesteps')
-        Vmhn, iters, e_est = integator(Vmhn, rhs, t0+i*ht_, ht_, **kwargs)
+        Vmhn, iters, e_est, residuals, sample0, sample1 = integator(Vmhn, rhs, t0+i*ht_, ht_, **kwargs)
         iters_list.append(iters)
         e_iters.append(e_est[0])
         e_discs.append(e_est[1])
+        res_trajectory.append(residuals)
+        sample0s.append(sample0)
+        sample1s.append(sample1)
         if not traj:
             result = Vmhn
         else:
             result.append(Vmhn)
-    return np.asarray(result), np.asarray(iters_list), [e_iters, e_discs] # cast list to array if we store the trajectory
+    print('\ndone!')
+    return np.asarray(result), np.asarray(iters_list), [e_iters, e_discs], res_trajectory, [np.asarray(sample0s), np.asarray(sample1s)] # cast list to array if we store the trajectory
 
 def strang_step_1H_1CN_FE(Vmhn0, rhs, t, ht, **kwargs):
     # unpack rhs for each component
@@ -440,10 +449,10 @@ def strang_step_1H_1CN_FE(Vmhn0, rhs, t, ht, **kwargs):
     # 1/2 interval for reaction term with Heun
     Vmhn = heun_step(Vmhn0, rhs_reaction, t, ht/2)
     # 1 interval for diffusion with Crank-Nicolson
-    Vmhn, iters, e_ests = crank_nicolson_FE_step(Vmhn, system_matrices_expl_impl, t, ht, **kwargs)
+    Vmhn, iters, e_ests, residuals, sample1, sample2 = crank_nicolson_FE_step(Vmhn, system_matrices_expl_impl, t, ht, **kwargs)
     # 1/2 interval for reaction term with Heun
     Vmhn = heun_step(Vmhn, rhs_reaction, t+ht/2, ht/2)
-    return Vmhn, iters, e_ests
+    return Vmhn, iters, e_ests, residuals, sample1, sample2 
 
 def strang_1H_1CN_FE(Vmhn, rhs0, system_matrices_expl_impl, t0, t1, hts, maxit=1000, eps=1e-10, traj=False, error_est=None):
     return stepper(strang_step_1H_1CN_FE, Vmhn, (rhs0, system_matrices_expl_impl), t0, t1, hts, error_est=error_est, maxit=maxit, eps=eps, traj=traj)
@@ -502,7 +511,7 @@ def iter_error_est(u0,u1,z,x,hx,ht,prefactor):
 # main
 ############################################################################################
 
-def main(tolerance, initial_value_file):
+def main():
     print('-------------------------------main-------------------------------')
     tend = float(sys.argv[2])
     hts = float(sys.argv[3])
@@ -572,7 +581,7 @@ def main(tolerance, initial_value_file):
     )
 
     # reuse CN code by replacing the implicit and explicit system matrices
-    trajectory, iters, e_ests = strang_1H_1CN_FE(
+    trajectory, iters, e_ests, res_trajectory, samples= strang_1H_1CN_FE(
         Vmhn0,
         rhs_hodgkin_huxley,
         (ie_sys_expl, ie_sys_impl),
@@ -585,21 +594,19 @@ def main(tolerance, initial_value_file):
         error_est = error_est
     )
 
+    ######## plot trajectories
     # indices: trajectory[time_index, point alog x-axis, variable]
     out_stride = 1
     np.save("out.npy",trajectory[::out_stride, :, :])
-
-    ######## plot results
-    print('Voltage range in the last timestep:')
-    print(f"  V: {np.min(trajectory[-1][:,0]):>+.2e} -- {np.max(trajectory[-1][:,0]):>+.2e}")
-
+    #print('Voltage range in the last timestep:')
+    #print(f"  V: {np.min(trajectory[-1][:,0]):>+.2e} -- {np.max(trajectory[-1][:,0]):>+.2e}")
     time_steps = trajectory.shape[0]
     step_stride = 400
     cs = np.linspace(0,1, time_steps // step_stride + 1)
     fig = plt.figure()
 
+    ###### plot the transmembrane voltage
     ax = fig.add_subplot(111)
-    # plot the transmembrane voltage
     ax.plot(xs, trajectory[::-step_stride, :, 0].T)
     for idx,line in enumerate(ax.lines): line.set_color((cs[idx], 0.5, 0.5))
     ax.plot(xs, trajectory[0, :, 0], '--', color='black',label='V_h(t=0)')
@@ -608,12 +615,13 @@ def main(tolerance, initial_value_file):
     plt.ylabel('transmembrane Potental V_m [mV]')
     plt.legend()
     plt.show()
-    ######### plot results 2
+
+    ####### plot CG iterations and Disc error over timesteps
     if tolerance == None:
         timesteps = (tend)/hts
-        print('timesteps', timesteps)
-        print('total # of iterations: ', np.sum(iters))
-        print('avg iterations perr timestep: ', np.sum(iters)/timesteps)
+        #print('timesteps', timesteps)
+        #print('total # of iterations: ', np.sum(iters))
+        #print('avg iterations per timestep: ', np.sum(iters)/timesteps)
         e_discs = e_ests[1]
         fig, axs = plt.subplots(3,1)
         timesteps = np.arange(0,timesteps,1)
@@ -628,8 +636,15 @@ def main(tolerance, initial_value_file):
         axs[2].set_xlabel('#timesteps')
         axs[2].legend()
         plt.show()
+    
+    ###### export residual trajectories
+    data = pd.DataFrame(res_trajectory)
+    data.to_csv(r'samples.csv', index=False, header=True)
+    metadata = {'timesteps': timesteps, 'cgiters': iters}
+    metadata = pd.DataFrame(metadata)
+    metadata.to_csv(r'data.csv', index=False, header=True)
 
-def disc_error_convtest(Nx_start, steps):
+def disc_error_convtest():
     print('-------------------------------disc_error_convtest-------------------------------')
     #read initial values and arguments
     initial_value_file = ''
@@ -775,7 +790,7 @@ def disc_error_convtest(Nx_start, steps):
         plt.legend()
         plt.show()
 
-def iter_error_convtest(tend):
+def iter_error_convtest():
     print('-------------------------------iter_error_convtest-------------------------------')
     initial_value_file = sys.argv[1]
 
@@ -883,7 +898,7 @@ def iter_error_convtest(tend):
         #solve primal problem for maxiter=maxit
         lhs = ie_sys_impl(hts,Nx)
         rhs = ie_sys_expl(hts,Nx)
-        V1 = mycg(lhs, rhs,V0[1:-1],1,maxiter = maxit, tol=0)
+        V1 = mycg(lhs, rhs,V0[1:-1],1,maxiter = maxit, tol=0)[:-1]
         V1 = V1[0]
         V1 = np.insert(V1, 0, V1[0])
         V1 = np.insert(V1, -1, V1[-1])
@@ -921,13 +936,19 @@ def iter_error_convtest(tend):
     plt.show()
 
 if __name__ == '__main__':
-    #without error estimation
-    main(tolerance=1e-12, initial_value_file = sys.argv[1])
-    #test setup for the discretization error
-    disc_error_convtest(Nx_start=100, steps=8)
-    #test setup for the discretization error
-    iter_error_convtest(tend=5)
-    #with error estimation for stopping criterion
-    main(tolerance=None, initial_value_file = sys.argv[1])
-    #with error estimation for stopping criterion (new initial values)
-    main(tolerance=None, initial_value_file = '')
+    #main
+    if True:
+        tolerance = None            #1e-12
+        initial_value_file = ''      #sys.argv[1]
+        main()
+
+    #disc_error_convtest
+    if False:
+        Nx_start = 100
+        steps = 8
+        disc_error_convtest()
+
+    #iter_error_convtest
+    if False:
+        tend = 5
+        iter_error_convtest()

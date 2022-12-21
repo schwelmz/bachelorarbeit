@@ -19,6 +19,8 @@ def mycg(A, b, x0, t, tol=1e-5, maxiter=None, convcontrol=None):
     e_iters = []
     e_iter = 0
     e_discs = []
+    xs = []
+    rs = []
     e_disc = 0
     k=0
     exit_code = -1
@@ -32,6 +34,8 @@ def mycg(A, b, x0, t, tol=1e-5, maxiter=None, convcontrol=None):
         alpha = alphanew
         k+=1
         ks.append(k)
+        xs.append(x)
+        rs.append(np.sqrt(alpha))
         if  convcontrol is not None:
             e_disc, e_iter = convcontrol(x,x0)
             e_iters.append(e_iter)
@@ -43,9 +47,20 @@ def mycg(A, b, x0, t, tol=1e-5, maxiter=None, convcontrol=None):
         if(k>=maxiter):
             exit_code = 1
     if False:
-        plt.plot(ks,e_iters,label='iteration error estimate')
-        plt.plot(ks,e_discs, label='discretization error estimate')
+        e_iters = np.asarray(e_iters)
+        e_discs = np.asarray(e_discs)
+        rs = np.asarray(rs)
+        plt.plot(ks,abs(e_iters),label='iteration error estimate')
+        plt.plot(ks,abs(e_discs), label='discretization error estimate')
         plt.yscale('log')
         plt.legend()
         plt.show()
-    return [x,exit_code, k, np.asarray([e_iter, e_disc])]
+        print(rs)
+        print(rs.shape)
+        plt.plot(ks, rs, label='residual')
+        plt.yscale('log')
+        plt.legend()
+        plt.show()
+    sample0 = np.linalg.norm(xs[-2])
+    sample1 = np.linalg.norm(xs[-1])
+    return [x,exit_code, k, np.asarray([e_iter, e_disc]), np.asarray(rs), sample0, sample1]
