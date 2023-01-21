@@ -606,17 +606,16 @@ def main():
     fig = plt.figure()
 
     ###### plot the transmembrane voltage
-    ax = fig.add_subplot(111)
-    ax.plot(xs, trajectory[::-step_stride, :, 0].T)
-    for idx,line in enumerate(ax.lines): line.set_color((cs[idx], 0.5, 0.5))
-    print(xs.shape)
-    print(trajectory[::-step_stride,:,0].T.shape)
-    ax.plot(xs, trajectory[0, :, 0], '--', color='black',label='V_h(t=0)')
-    ax.plot(xs, trajectory[-1, :, 0], color='black', label='V_h(t=5)')
-    plt.xlabel('fiber length [cm]')
-    plt.ylabel('transmembrane Potental V_m [mV]')
-    plt.legend()
-    plt.show()
+    if False:
+        ax = fig.add_subplot(111)
+        ax.plot(xs, trajectory[::-step_stride, :, 0].T)
+        for idx,line in enumerate(ax.lines): line.set_color((cs[idx], 0.5, 0.5))
+        ax.plot(xs, trajectory[0, :, 0], '--', color='black',label='V_h(t=0)')
+        ax.plot(xs, trajectory[-1, :, 0], color='black', label='V_h(t=5)')
+        plt.xlabel('fiber length [cm]')
+        plt.ylabel('transmembrane Potental V_m [mV]')
+        plt.legend()
+        plt.show()
 
     ####### plot CG iterations and Disc error over timesteps
     if tolerance == None:
