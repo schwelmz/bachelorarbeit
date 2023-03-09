@@ -422,8 +422,8 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
     iters_list = []
     e_iters = []
     e_discs = []
-    sample0s = []
-    sample1s = []
+    sample0s = np.zeros((n_steps,10))
+    sample1s = np.zeros((n_steps,10))
     res_trajectory = []
     print('Starting solver...')
     for i in range(n_steps):
@@ -433,14 +433,14 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
         e_iters.append(e_est[0])
         e_discs.append(e_est[1])
         res_trajectory.append(residuals)
-        sample0s.append(sample0)
-        sample1s.append(sample1)
+        sample0s[i,:sample0.shape[0]]=sample0
+        sample1s[i,:sample1.shape[0]]=sample1
         if not traj:
             result = Vmhn
         else:
             result.append(Vmhn)
     print('\ndone!')
-    return np.asarray(result), np.asarray(iters_list), [e_iters, e_discs], res_trajectory, [np.asarray(sample0s), np.asarray(sample1s)] # cast list to array if we store the trajectory
+    return np.asarray(result), np.asarray(iters_list), [e_iters, e_discs], res_trajectory, [sample0s, sample1s] # cast list to array if we store the trajectory
 
 def strang_step_1H_1CN_FE(Vmhn0, rhs, t, ht, **kwargs):
     # unpack rhs for each component
@@ -597,16 +597,16 @@ def main():
     ######## plot trajectories
     # indices: trajectory[time_index, point alog x-axis, variable]
     out_stride = 1
-    np.save("out.npy",trajectory[::out_stride, :, :])
+    np.save("out/out_trajectories.npy",trajectory[::out_stride, :, :])
     #print('Voltage range in the last timestep:')
     #print(f"  V: {np.min(trajectory[-1][:,0]):>+.2e} -- {np.max(trajectory[-1][:,0]):>+.2e}")
     time_steps = trajectory.shape[0]
-    step_stride = 400
+    step_stride = 40
     cs = np.linspace(0,1, time_steps // step_stride + 1)
     fig = plt.figure()
 
     ###### plot the transmembrane voltage
-    if False:
+    if True:
         ax = fig.add_subplot(111)
         ax.plot(xs, trajectory[::-step_stride, :, 0].T)
         for idx,line in enumerate(ax.lines): line.set_color((cs[idx], 0.5, 0.5))
@@ -638,12 +638,19 @@ def main():
         axs[2].legend()
         plt.show()
     
-    ###### export residual trajectories
-    data = pd.DataFrame(res_trajectory)
-    data.to_csv(r'samples.csv', index=False, header=True)
-    metadata = {'timesteps': timesteps, 'cgiters': iters}
-    metadata = pd.DataFrame(metadata)
-    metadata.to_csv(r'data.csv', index=False, header=True)
+    if True:
+        ###### export residual trajectories
+        data = pd.DataFrame(res_trajectory)
+        data.to_csv(r'out/samples.csv', index=False, header=True)
+        metadata = {'timesteps': timesteps, 'cgiters': iters}
+        metadata = pd.DataFrame(metadata)
+        metadata.to_csv(r'out/data.csv', index=False, header=True)
+
+        ##### export error trajectories
+        e_iters_list = samples[0]
+        e_discs_list = samples[1]
+        np.save("out/out_itererrors.npy", e_iters_list)
+        np.save("out/out_discerrors.npy", e_discs_list)
 
 def disc_error_convtest():
     print('-------------------------------disc_error_convtest-------------------------------')

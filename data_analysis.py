@@ -7,10 +7,11 @@ import matplotlib as mpl
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 from matplotlib.legend_handler import HandlerTuple
 import time
+import imageio
 
 def clustering(samples, ncluster, scaling=False):
     #KMeans Clustering
-    kmeans = KMeans(n_clusters=ncluster)
+    kmeans = KMeans(n_clusters=ncluster, init='k-means++', random_state=170)
     if scaling == True:
         scaler = preprocessing.StandardScaler().fit(samples) 
         samples = scaler.transform(samples)
@@ -49,7 +50,7 @@ def clustering(samples, ncluster, scaling=False):
 def make_plots(labels):
     colors = ['red','orange','blue','green','purple','brown','pink','gray','olive','cyan','magenta', 'yellow', 'black', 'darkgreen', 'darkblue', 'deeppink']
     #color clusters of cg iterations
-    if True:
+    if False:
         fig1 = plt.figure()
         ax1 = fig1.add_subplot(111)
         for c in range(0,ncluster):
@@ -61,6 +62,7 @@ def make_plots(labels):
         ax1.legend()
         plt.show()
 
+    ######################################################### residual trajectories ####################################################################################
     #plot cg resiudal trajectories
     if False:
         step_stride = 1
@@ -194,9 +196,10 @@ def make_plots(labels):
         ax7.set_ylabel('residual norm')
         plt.show()
 
+    ######################################################### transmembrane voltage ####################################################################################
     ###### plot the transmembarane voltage colored by cg iterations needed
     xs = np.linspace(0,11.9,1191)
-    if True:
+    if False:
         step_stride = 10
         fig8 = plt.figure()
         ax8 = fig8.add_subplot(111)
@@ -246,7 +249,7 @@ def make_plots(labels):
         plt.show()
 
     ###### plot the transmembrane voltage colored by cluster membership
-    if True:
+    if False:
         step_stride = 10
         fig10 = plt.figure()
         ax10 = fig10.add_subplot(111)
@@ -272,14 +275,164 @@ def make_plots(labels):
         plt.legend()
         plt.show()
 
+    ######################################################### error estimates trajectories ####################################################################################
+    ###### plot the iteration error trajectories
+    if False:
+        step_stride = 10
+        fig11 = plt.figure()
+        ax11 = fig11.add_subplot()
+        l, b, h, w = .35, .7, .30, .30
+        ax11in = ax11.inset_axes([l,b,w,h])
+        ax11in.set_ylim(1.4e-3,2.0e-3)
+        ax11in.set_xlim(0.925, 1.025)
+        ax11in.set_yscale('log')
+        ax11.indicate_inset_zoom(ax11in)
+        ax11in2 = ax11.inset_axes([.7,.4,w,h])
+        ax11in2.set_ylim(8e-08, 2e-07)
+        ax11in2.set_xlim(3.9, 4)
+        ax11in2.set_yscale('log')
+        ax11.indicate_inset_zoom(ax11in2)
+
+        ax11.set_yscale('log')
+        cs = np.linspace(0,1, timesteps//step_stride+1)
+        for k in range(0, timesteps, step_stride): 
+            ax11.plot(np.arange(5), abs(e_iters[k,:]), color=(cs[k//step_stride], 0.5, 0.5))
+            ax11in.plot(np.arange(5), abs(e_iters[k,:]), color=(cs[k//step_stride], 0.5, 0.5))
+            ax11in2.plot(np.arange(5), abs(e_iters[k,:]), color=(cs[k//step_stride], 0.5, 0.5))
+            fig11.set_size_inches(14,10)
+            fig11.savefig('plots/error_trajectories/error_trajectory'+str(k)+'.png', dpi=100)
+            print('\rplotting '+str(k)+' of '+str(timesteps), end='', flush=True)
+        plt.show()
+
+        # Build GIF
+        print('\n building .gif file')
+        with imageio.get_writer('plots/error_trajectories.gif', mode='I') as writer:
+            for filename in range(0,timesteps, step_stride):
+                image = imageio.v2.imread('plots/error_trajectories/error_trajectory' + str(filename)+ '.png')
+                writer.append_data(image)
+    
+    ###### plot the iteration error trajectories colored by cluster membership
+    if False:
+        step_stride = 10
+        fig12 = plt.figure()
+        ax12 = fig12.add_subplot()
+        l, b, h, w = .6, .5, .35, .35
+        ax12in = ax12.inset_axes([l,b,w,h])
+        ax12in.set_ylim(1.4e-3,2.0e-3)
+        ax12in.set_xlim(0.925, 1.025)
+        ax12in.set_yscale('log')
+        ax12.indicate_inset_zoom(ax12in)
+        ax12.set_yscale('log')
+        cs = np.linspace(0,1, timesteps//step_stride+1)
+        labels_stride = labels[::step_stride]
+        for k in range(0, timesteps, step_stride): 
+            ax12.plot(np.arange(5), abs(e_iters[k,:]), color=colors[labels_stride[k//step_stride]])
+            ax12in.plot(np.arange(5), abs(e_iters[k,:]), color=colors[labels_stride[k//step_stride]])
+            fig12.set_size_inches(14,10)
+            fig12.savefig('plots/error_trajectories/error_trajectory'+str(k)+'.png', dpi=100)
+            print('\rplotting '+str(k)+' of '+str(timesteps), end='', flush=True)
+        plt.show()
+
+        # Build GIF
+        print('\nbuilding .gif file')
+        with imageio.get_writer('plots/error_trajectories.gif', mode='I') as writer:
+            for filename in range(0,timesteps, step_stride):
+                image = imageio.v2.imread('plots/error_trajectories/error_trajectory' + str(filename)+ '.png')
+                writer.append_data(image)
+
+    ###### plot the iteration error trajectories colored by cg iterations needed
+    if True:
+        step_stride = 10
+        fig13 = plt.figure()
+        ax13 = fig13.add_subplot()
+        l, b, h, w = .35, .7, .30, .30
+        ax13in = ax13.inset_axes([l,b,w,h])
+        ax13in.set_ylim(1.4e-3,2.0e-3)
+        ax13in.set_xlim(0.925, 1.025)
+        ax13in.set_yscale('log')
+        ax13.indicate_inset_zoom(ax13in)
+        ax13in2 = ax13.inset_axes([.7,.4,w,h])
+        ax13in2.set_ylim(8e-08, 5e-07)
+        ax13in2.set_xlim(3.9, 4)
+        ax13in2.set_yscale('log')
+        ax13.indicate_inset_zoom(ax13in2)
+        ax13.set_yscale('log')
+        cs = np.linspace(0,1, timesteps//step_stride+1)
+        labels_stride = labels[::step_stride]
+        for k in range(0, timesteps, step_stride): 
+            if k <= cut_index_true:
+                ax13.plot(np.arange(5), abs(e_iters[k,:]), color='cyan')
+                ax13.plot(np.arange(5), abs(e_discs[k,:]), color='cyan')
+                ax13in.plot(np.arange(5), abs(e_iters[k,:]), color='cyan')
+                ax13in2.plot(np.arange(5), abs(e_iters[k,:]), color='cyan')
+                ax13in2.plot(np.arange(5), abs(e_discs[k,:]), color='cyan')
+            else:
+                ax13.plot(np.arange(5), abs(e_iters[k,:]), color='magenta')
+                ax13.plot(np.arange(5), abs(e_discs[k,:]), color='magenta')
+                ax13in.plot(np.arange(5), abs(e_iters[k,:]), color='magenta')
+                ax13in2.plot(np.arange(5), abs(e_iters[k,:]), color='magenta')
+                ax13in2.plot(np.arange(5), abs(e_discs[k,:]), color='magenta')
+            #ax13.plot(np.arange(5), abs(e_discs[k,:]), color='black', linestyle='--')
+            fig13.set_size_inches(14,10)
+            #plt.pause(0.0001)
+            ax13.set_xlabel('# CG Iterations')
+            ax13.set_ylabel('error estimates (discretization & iteration)')
+            fig13.savefig('plots/error_trajectories/error_trajectory'+str(k)+'.png', dpi=100)
+            print('\rplotting '+str(k)+' of '+str(timesteps), end='', flush=True)
+        ax13.lines[-1].set_label('5 CG Iterations needed')
+        ax13.lines[-1].set_label('6 CG Iterations needed')
+
+        plt.show()
+
+        # Build GIF
+        print('\nbuilding .gif file')
+        with imageio.get_writer('plots/error_trajectories.gif', mode='I') as writer:
+            for filename in range(0,timesteps, step_stride):
+                image = imageio.v2.imread('plots/error_trajectories/error_trajectory' + str(filename)+ '.png')
+                writer.append_data(image)
+ 
+    ###### plot the first error estimates in a 2d plot
+    if False:
+        fig14 = plt.figure()
+        ax14 = fig14.add_subplot()
+        ax14.scatter(e_discs[:cut_index_true,0], e_iters[:cut_index_true,0], color='cyan')
+        ax14.scatter(e_discs[cut_index_true:,0], e_iters[cut_index_true:,0], color='magenta')
+        ax14.set_xlabel('e_discs')
+        ax14.set_ylabel('e_iters')
+        plt.show()
+
+    ###### plot the first two iteration error estimates in a 2d plot
+    if False:
+        fig14 = plt.figure()
+        ax14 = fig14.add_subplot()
+        ax14.scatter(e_iters[:cut_index_true,0], e_iters[:cut_index_true,1], color='cyan')
+        ax14.scatter(e_iters[cut_index_true:,0], e_iters[cut_index_true:,1], color='magenta')
+        ax14.set_xlabel('e_iters[0]')
+        ax14.set_ylabel('e_iters[1]')
+        plt.show()
+
+    ###### plot the first two discretization error estimates in a 2d plot
+    if False:
+        fig14 = plt.figure()
+        ax14 = fig14.add_subplot()
+        ax14.scatter(e_discs[:cut_index_true,0], e_discs[:cut_index_true,1], color='cyan')
+        ax14.scatter(e_discs[cut_index_true:,0], e_discs[cut_index_true:,1], color='magenta')
+        ax14.set_xlabel('e_discs[0]')
+        ax14.set_ylabel('e_discs[1]')
+        plt.show()
+ 
 if __name__ == '__main__':
     #read out.npy file
-    trajectory = np.load('out.npy')
+    trajectory = np.load('out/out_trajectories.npy')
+    e_iters = np.load('out/out_itererrors.npy')
+    e_discs = np.load('out/out_discerrors.npy')
+    #e_iters = e_iters[:,:2]
+    #e_discs = e_discs[:,:2]
 
     #read csv files
-    samples = pd.read_csv('samples.csv')
+    samples = pd.read_csv('out/samples.csv')
     samples = samples.to_numpy()
-    data = pd.read_csv('data.csv')
+    data = pd.read_csv('out/data.csv')
     data = data.to_numpy()
 
     #global
@@ -298,7 +451,9 @@ if __name__ == '__main__':
 
     #clustering
     #samples = trajectories_max.reshape(-1,1)
-    ncluster = 16
+    samples = e_iters
+    #samples = np.hstack((e_discs,e_iters))
+    ncluster = 2
     labels, cut_idxs = clustering(samples, ncluster, scaling=False)
 
     #plot results

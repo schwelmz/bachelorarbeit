@@ -61,6 +61,6 @@ def mycg(A, b, x0, t, tol=1e-5, maxiter=None, convcontrol=None):
         plt.yscale('log')
         plt.legend()
         plt.show()
-    sample0 = np.linalg.norm(xs[-2])
-    sample1 = np.linalg.norm(xs[-1])
+    sample0 = np.asarray(e_iters)
+    sample1 = np.asarray(e_discs)
     return [x,exit_code, k, np.asarray([e_iter, e_disc]), np.asarray(rs), sample0, sample1]
