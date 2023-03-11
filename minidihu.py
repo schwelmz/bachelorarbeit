@@ -9,6 +9,7 @@ from functools import lru_cache
 import matplotlib.pyplot as plt
 from mycg import mycg
 import pandas as pd
+import math as m
 
 ############################################################################################
 # auxiliary methods
@@ -138,6 +139,66 @@ def create_initial_fiber(initial_value_file, Nx, x_start, x_end, Vmhn_initial=No
         print(f"  Am:    {Am:>7.3f}")
         print(f"  Cm:    {Cm:>7.3f}")
     return [Nx, xs, hxs, Vmhn0]
+
+def divided_diff(x,f):
+    '''
+    compute the divided differences table
+    '''
+    n = len(f)
+    coef = np.zeros([n,n])
+    coef[:,0] = f
+    for j in range(1,n):
+        for i in range(n-j):
+            coef[i, j] = (coef[i+1, j-1] - coef[i, j-1]) / (x[j+i] - x[i])
+    return coef;
+
+def newton_poly(coef, x_data, x):
+    '''
+    evaluate the newton polynomial at x using the horner scheme
+    '''
+    n = len(x_data)-1
+    p = coef[n]
+    for k in range(1,n+1):
+        p = coef[n-k] + (x-x_data[n-k])*p
+    return p
+
+def calc_root(x_used, e_diff, tdx, n_steps):
+   #chebyshev nodes
+    x = x_used[-3:]
+    f_cheb =e_diff[-3:]
+
+    #newton interpolation
+    xx = np.linspace(x[0], n_steps, n_steps)
+    coef = divided_diff(x,f_cheb)[0, :]
+    f_inter = newton_poly(coef, x, xx)
+
+    #calculate roots
+    [c0,c1,c2] = coef
+    [x0,x1,x2] = x
+    c = c0 - c1*x0 + c2*x0*x1   #p(x) = c + b*x + a*x²
+    b = c1-c2*x0-c2*x1
+    a = c2
+    root1 = (-b+np.sqrt(b**2-4*a*c))/(2*a)
+    root2 = (-b-np.sqrt(b**2-4*a*c))/(2*a)
+    if abs(root1 - tdx) < abs(root2 - tdx):
+        if root1 > tdx:
+            root = root1
+        else:
+            root = root2
+    else:
+        root = root2
+
+    #plots 
+    plt.plot(x_used, e_diff, color='blue')
+    plt.plot(xx,f_inter, color='blue',linestyle='--')
+    plt.scatter(x,f_cheb, marker='x', color='red')
+    plt.scatter(root,0,color='red')
+    plt.axhline(y=0, linestyle='--', color='black')
+    plt.xlim(0, n_steps)
+    plt.ylim(-1.5e-7, 1.5e-7)
+    plt.pause(0.1)
+
+    return root
 
 ############################################################################################
 # create matrices
@@ -391,7 +452,11 @@ def heun_step(Vmhn, rhs, t, ht):
     Vmhn1 = Vmhn + ht * rhs(Vmhn0, t + ht)
     return (Vmhn0 + Vmhn1) / 2
 
-def crank_nicolson_FE_step(Vmhn0, sys_expl_impl, t, ht, error_est=None, maxit=1000, eps=1e-10):
+def crank_nicolson_FE_step(Vmhn0, sys_expl_impl, t, ht, maxiter, convcontrol, error_est=None, maxit=1000, eps=1e-10):
+    #regulate convcontrol
+    if convcontrol == False:
+        error_est = None
+
     # get explicit and implicit system matrix
     cn_sys_expl, cn_sys_impl = sys_expl_impl
     Vmhn0 = np.array(Vmhn0)
@@ -402,7 +467,7 @@ def crank_nicolson_FE_step(Vmhn0, sys_expl_impl, t, ht, error_est=None, maxit=10
 
     lhs = cn_sys_impl(ht,Nx)
     rhs = cn_sys_expl(ht,Nx)
-    Vmhn0[1:-1,0], exit_code, iters, e_ests, residuals, sample1, sample2 = mycg(lhs, rhs, V0[1:-1], t, maxiter=maxit, tol=eps, convcontrol=error_est)        #V1
+    Vmhn0[1:-1,0], exit_code, iters, e_ests, residuals, sample1, sample2 = mycg(lhs, rhs, V0[1:-1], t, maxiter=maxiter, tol=eps, convcontrol=error_est)        #V1
     print('\rexit_code = ' + str(exit_code) + '   CG Iterations = ' + str(iters) + '   t = ' + str(t), end='', flush=True)
     Vmhn0[0,0] = Vmhn0[1,0]
     Vmhn0[-1,0] = Vmhn0[-2,0]
@@ -419,37 +484,141 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
     n_steps = max(1, int((t1-t0)/ht + 0.5)) # round to nearest integer
     ht_ = (t1-t0) / n_steps
 
+    #initialize lists
     iters_list = []
     e_iters = []
     e_discs = []
+    res_trajectory = []
+    e_diffs_lower = []
+    e_diffs_upper = []
+    t_steps_used = []
+    roots_lower = [float('NaN')]
+    roots_upper = [float('NaN')]
+    root_lower_old = float('NaN')
+    root_lower = float('NaN')
+    root_upper_old = float('NaN')
+    root_upper = float('NaN')
+
+    #initial settings
+    free_steps = 0
+    paid_steps = 10
+    k = 10
     sample0s = np.zeros((n_steps,10))
     sample1s = np.zeros((n_steps,10))
-    res_trajectory = []
     print('Starting solver...')
     for i in range(n_steps):
-        #print(i, '/', n_steps, 'timesteps')
-        Vmhn, iters, e_est, residuals, sample0, sample1 = integator(Vmhn, rhs, t0+i*ht_, ht_, **kwargs)
+        #decide if convergence control is needed
+        if free_steps > 0:
+            conv_control = False
+        else:
+            conv_control = True
+            maxit = 1000
+
+        #solve the linear SOE
+        Vmhn, iters, e_est, residuals, sample0, sample1 = integator(Vmhn, rhs, t0+i*ht_, ht_, maxit, conv_control, **kwargs)
+
+        #if iteration number changed, delete the history
+        if i==0:
+            maxit_old = iters
+        if iters != maxit_old:
+            print('\n tdx =', i,' iters = ', iters)
+            k = 10
+            e_diffs_lower = []
+            e_diffs_upper = []
+            t_steps_used = []
+            roots_lower = [float('NaN')]
+            roots_upper = [float('NaN')]
+            root_lower_old = float('NaN')
+            root_lower = float('NaN')
+            root_upper_old = float('NaN')
+            root_upper = float('NaN')
+            free_steps = 0
+            paid_steps = 10
+
+        if conv_control == True:
+            maxit_old = iters
+            if k <= 10 and k >=0:
+                e_diffs_lower.append( abs( sample1[-2]) - abs(sample0[-2]) )
+                e_diffs_upper.append( abs( sample1[-1]) - abs(sample0[-1]) )
+                t_steps_used.append(i)
+                k = k - 1
+            if paid_steps == 0:
+                e_diffs_lower.append( abs( sample1[-2]) - abs(sample0[-2]) )
+                e_diffs_upper.append( abs( sample1[-1]) - abs(sample0[-1]) )
+                t_steps_used.append(i)
+                #interpolation and root calculation
+                root_lower = calc_root(t_steps_used, e_diffs_lower, i, n_steps)
+                root_upper = calc_root(t_steps_used, e_diffs_upper, i, n_steps)
+                #check if roots are real numbers
+                upper = False
+                lower = False
+                if m.isnan(root_lower):
+                    upper = True
+                elif m.isnan(root_upper):
+                    lower = True
+                #select the closer root
+                if upper == False and lower == False:
+                    if root_lower < root_upper:
+                        lower = True
+                    else:
+                        upper = True
+                #set root and root_old
+                if lower == True:
+                    root = root_lower
+                    root_old = root_lower_old
+                elif upper == True:
+                    root = root_upper
+                    root_old = root_upper_old
+                #calculate the root diff
+                root_diff = abs(root-root_old)
+                if root_diff < 100:
+                    free_steps = abs(root-i)//8
+                elif root_diff < 10:
+                    free_steps = abs(root-i)//4
+                elif root_diff < 1:
+                    free_steps = abs(root-i)//2
+                #perform cg with maxits for free_steps
+                if free_steps > 10:
+                    maxit = iters
+                else:
+                    paid_steps = 10
+                    free_steps = 0
+
+        #update settings
+        if free_steps > 0:
+            free_steps = free_steps - 1
+        if paid_steps > 0: 
+            paid_steps = paid_steps - 1
+        root_lower_old = root_lower
+        root_upper_old = root_upper
+
+        # update lists
         iters_list.append(iters)
         e_iters.append(e_est[0])
         e_discs.append(e_est[1])
         res_trajectory.append(residuals)
         sample0s[i,:sample0.shape[0]]=sample0
         sample1s[i,:sample1.shape[0]]=sample1
+
+        #plot
+        plt.clf()
+
         if not traj:
             result = Vmhn
         else:
             result.append(Vmhn)
+        
     print('\ndone!')
     return np.asarray(result), np.asarray(iters_list), [e_iters, e_discs], res_trajectory, [sample0s, sample1s] # cast list to array if we store the trajectory
 
-def strang_step_1H_1CN_FE(Vmhn0, rhs, t, ht, **kwargs):
+def strang_step_1H_1CN_FE(Vmhn0, rhs, t, ht, maxiter, convcontrol, **kwargs):
     # unpack rhs for each component
     rhs_reaction, system_matrices_expl_impl = rhs
 
     # 1/2 interval for reaction term with Heun
     Vmhn = heun_step(Vmhn0, rhs_reaction, t, ht/2)
     # 1 interval for diffusion with Crank-Nicolson
-    Vmhn, iters, e_ests, residuals, sample1, sample2 = crank_nicolson_FE_step(Vmhn, system_matrices_expl_impl, t, ht, **kwargs)
+    Vmhn, iters, e_ests, residuals, sample1, sample2 = crank_nicolson_FE_step(Vmhn, system_matrices_expl_impl, t, ht, maxiter, convcontrol, **kwargs)
     # 1/2 interval for reaction term with Heun
     Vmhn = heun_step(Vmhn, rhs_reaction, t+ht/2, ht/2)
     return Vmhn, iters, e_ests, residuals, sample1, sample2 
@@ -593,6 +762,7 @@ def main():
         maxit=time_discretization['maxit'],
         error_est = error_est
     )
+    print('e_ests_shape: ',len(e_ests))
 
     ######## plot trajectories
     # indices: trajectory[time_index, point alog x-axis, variable]

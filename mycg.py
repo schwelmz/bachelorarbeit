@@ -5,7 +5,7 @@ import scipy.sparse.linalg as sp
 
             
 
-def mycg(A, b, x0, t, tol=1e-5, maxiter=None, convcontrol=None):
+def mycg(A, b, x0, t, tol=1e-5,maxitermode = False, maxiter=None, convcontrol=None):
     b = b*x0
     n = A.shape[0]
     if maxiter==None:
@@ -36,7 +36,7 @@ def mycg(A, b, x0, t, tol=1e-5, maxiter=None, convcontrol=None):
         ks.append(k)
         xs.append(x)
         rs.append(np.sqrt(alpha))
-        if  convcontrol is not None:
+        if  convcontrol is not None and maxitermode == False:
             e_disc, e_iter = convcontrol(x,x0)
             e_iters.append(e_iter)
             e_discs.append(e_disc)
