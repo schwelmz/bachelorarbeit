@@ -189,14 +189,14 @@ def calc_root(x_used, e_diff, tdx, n_steps):
         root = root2
 
     #plots 
-    plt.plot(x_used, e_diff, color='blue')
-    plt.plot(xx,f_inter, color='blue',linestyle='--')
-    plt.scatter(x,f_cheb, marker='x', color='red')
-    plt.scatter(root,0,color='red')
-    plt.axhline(y=0, linestyle='--', color='black')
-    plt.xlim(0, n_steps)
-    plt.ylim(-1.5e-7, 1.5e-7)
-    plt.pause(0.1)
+    #plt.plot(x_used, e_diff, color='blue')
+    #plt.plot(xx,f_inter, color='blue',linestyle='--')
+    #plt.scatter(x,f_cheb, marker='x', color='red')
+    #plt.scatter(root,0,color='red')
+    #plt.axhline(y=0, linestyle='--', color='black')
+    #plt.xlim(0, n_steps)
+    #plt.ylim(-1.5e-7, 1.5e-7)
+    #plt.pause(0.1)
 
     return root
 
@@ -498,6 +498,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
     root_lower = float('NaN')
     root_upper_old = float('NaN')
     root_upper = float('NaN')
+    counter = 0
 
     #initial settings
     free_steps = 0
@@ -512,6 +513,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
             conv_control = False
         else:
             conv_control = True
+            counter += 1
             maxit = 1000
 
         #solve the linear SOE
@@ -601,14 +603,14 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
         sample1s[i,:sample1.shape[0]]=sample1
 
         #plot
-        plt.clf()
+        #plt.clf()
 
         if not traj:
             result = Vmhn
         else:
             result.append(Vmhn)
         
-    print('\ndone!')
+    print('\ndone! errors calculated: ', counter, 'times')
     return np.asarray(result), np.asarray(iters_list), [e_iters, e_discs], res_trajectory, [sample0s, sample1s] # cast list to array if we store the trajectory
 
 def strang_step_1H_1CN_FE(Vmhn0, rhs, t, ht, maxiter, convcontrol, **kwargs):
@@ -785,7 +787,7 @@ def main():
         plt.xlabel('fiber length [cm]')
         plt.ylabel('transmembrane Potental V_m [mV]')
         plt.legend()
-        plt.show()
+        #plt.show()
 
     ####### plot CG iterations and Disc error over timesteps
     if tolerance == None:
@@ -806,7 +808,7 @@ def main():
         axs[2].plot(timesteps, e_discs, label='Discretization error')
         axs[2].set_xlabel('#timesteps')
         axs[2].legend()
-        plt.show()
+        #plt.show()
     
     if True:
         ###### export residual trajectories
