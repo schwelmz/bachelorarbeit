@@ -193,23 +193,28 @@ def calc_root(x_used, e_diff, tdx, n_steps):
     else:
         root1 = float('NaN')
         root2 = float('NaN')
-    if abs(root1 - tdx) < abs(root2 - tdx):
-        if root1 > tdx:
+    
+    if root1 > tdx and root2 > tdx:
+        if abs(root1 - tdx) < abs(root2 - tdx):
             root = root1
         else:
             root = root2
-    else:
+    elif root1 > tdx:
+        root = root1
+    elif root2 > tdx:
         root = root2
+    else:
+        root = float('NaN')
 
     #plots 
-    plt.plot(x_used, e_diff, color='blue')
-    plt.plot(xx,f_inter, color='blue',linestyle='--')
-    plt.scatter(x,f_cheb, marker='x', color='red')
-    plt.scatter(root,0,color='red')
-    plt.axhline(y=0, linestyle='--', color='black')
-    plt.xlim(0, n_steps)
-    plt.ylim(-1.5e-7, 1.5e-7)
-    plt.pause(0.1)
+    #plt.plot(x_used, e_diff, color='blue')
+    #plt.plot(xx,f_inter, color='blue',linestyle='--')
+    #plt.scatter(x,f_cheb, marker='x', color='red')
+    #plt.scatter(root,0,color='red')
+    #plt.axhline(y=0, linestyle='--', color='black')
+    #plt.xlim(0, n_steps)
+    #plt.ylim(-1.5e-7, 1.5e-7)
+    #plt.pause(0.1)
 
     return root
 
@@ -615,7 +620,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
         sample1s[i,:sample1.shape[0]]=sample1
 
         #plot
-        plt.clf()
+        #plt.clf()
 
         if not traj:
             result = Vmhn
