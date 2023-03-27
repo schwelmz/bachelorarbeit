@@ -162,24 +162,37 @@ def newton_poly(coef, x_data, x):
         p = coef[n-k] + (x-x_data[n-k])*p
     return p
 
+def monomial_interpolation(x,y,n):
+    A = np.zeros([n+1,n+1])
+    for i in range(n+1):
+        A[::,i] = np.power(x.T,i)
+    s = np.linalg.solve(A,y)
+    return s
+
 def calc_root(x_used, e_diff, tdx, n_steps):
    #chebyshev nodes
-    x = x_used[-3:]
-    f_cheb =e_diff[-3:]
+    x = np.asarray(x_used[-3:])
+    f_cheb = np.asarray(e_diff[-3:])
 
     #newton interpolation
     xx = np.linspace(x[0], n_steps, n_steps)
-    coef = divided_diff(x,f_cheb)[0, :]
-    f_inter = newton_poly(coef, x, xx)
+    #coef = divided_diff(x,f_cheb)[0, :]
+    #f_inter = newton_poly(coef, x, xx)
+    c,b,a = monomial_interpolation(x,f_cheb,2)
+    f_inter = c +b*xx + a*xx**2
 
     #calculate roots
-    [c0,c1,c2] = coef
-    [x0,x1,x2] = x
-    c = c0 - c1*x0 + c2*x0*x1   #p(x) = c + b*x + a*x²
-    b = c1-c2*x0-c2*x1
-    a = c2
-    root1 = (-b+np.sqrt(b**2-4*a*c))/(2*a)
-    root2 = (-b-np.sqrt(b**2-4*a*c))/(2*a)
+    #[c0,c1,c2] = coef
+    #[x0,x1,x2] = x
+    #c = c0 - c1*x0 + c2*x0*x1   #p(x) = c + b*x + a*x²
+    #b = c1-c2*x0-c2*x1
+    #a = c2
+    if (b**2-4*a*c) >= 0:
+        root1 = (-b+np.sqrt(b**2-4*a*c))/(2*a)
+        root2 = (-b-np.sqrt(b**2-4*a*c))/(2*a)
+    else:
+        root1 = float('NaN')
+        root2 = float('NaN')
     if abs(root1 - tdx) < abs(root2 - tdx):
         if root1 > tdx:
             root = root1
@@ -189,14 +202,14 @@ def calc_root(x_used, e_diff, tdx, n_steps):
         root = root2
 
     #plots 
-    #plt.plot(x_used, e_diff, color='blue')
-    #plt.plot(xx,f_inter, color='blue',linestyle='--')
-    #plt.scatter(x,f_cheb, marker='x', color='red')
-    #plt.scatter(root,0,color='red')
-    #plt.axhline(y=0, linestyle='--', color='black')
-    #plt.xlim(0, n_steps)
-    #plt.ylim(-1.5e-7, 1.5e-7)
-    #plt.pause(0.1)
+    plt.plot(x_used, e_diff, color='blue')
+    plt.plot(xx,f_inter, color='blue',linestyle='--')
+    plt.scatter(x,f_cheb, marker='x', color='red')
+    plt.scatter(root,0,color='red')
+    plt.axhline(y=0, linestyle='--', color='black')
+    plt.xlim(0, n_steps)
+    plt.ylim(-1.5e-7, 1.5e-7)
+    plt.pause(0.1)
 
     return root
 
@@ -210,7 +223,6 @@ Conductivity = 3.828    # sigma, conductivity [mS/cm]
 Am = 500.0              # surface area to volume ratio [cm^-1]
 Cm = 0.58               # membrane capacitance [uF/cm^2]
 prefactor = Conductivity / Am / Cm
-print('prefactor =', prefactor)
 
 def rhs_hh(Vmhn, style='numpy'):
     # numpy takes [[v,m,h,n]]*N: shape=(n,4)
@@ -523,7 +535,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
         if i==0:
             maxit_old = iters
         if iters != maxit_old:
-            print('\n tdx =', i,' iters = ', iters)
+            print('\nat timestep tdx=', i,'CGiters switch from', maxit_old, 'to',iters)
             k = 10
             e_diffs_lower = []
             e_diffs_upper = []
@@ -539,7 +551,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
 
         if conv_control == True:
             maxit_old = iters
-            if k <= 10 and k >=0:
+            if k <=10 and k >0:
                 e_diffs_lower.append( abs( sample1[-2]) - abs(sample0[-2]) )
                 e_diffs_upper.append( abs( sample1[-1]) - abs(sample0[-1]) )
                 t_steps_used.append(i)
@@ -603,7 +615,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
         sample1s[i,:sample1.shape[0]]=sample1
 
         #plot
-        #plt.clf()
+        plt.clf()
 
         if not traj:
             result = Vmhn
@@ -764,7 +776,6 @@ def main():
         maxit=time_discretization['maxit'],
         error_est = error_est
     )
-    print('e_ests_shape: ',len(e_ests))
 
     ######## plot trajectories
     # indices: trajectory[time_index, point alog x-axis, variable]
