@@ -213,8 +213,8 @@ def calc_root(x_used, e_diff, tdx, n_steps):
     #plt.scatter(root,0,color='red')
     #plt.axhline(y=0, linestyle='--', color='black')
     #plt.xlim(0, n_steps)
-    #plt.ylim(-1.5e-7, 1.5e-7)
-    #plt.pause(0.1)
+    #plt.ylim(-1.5e-8, 1.5e-8)
+    #plt.pause(0.2)
 
     return root
 
@@ -803,7 +803,7 @@ def main():
         plt.xlabel('fiber length [cm]')
         plt.ylabel('transmembrane Potental V_m [mV]')
         plt.legend()
-        #plt.show()
+        plt.show()
 
     ####### plot CG iterations and Disc error over timesteps
     if tolerance == None:
@@ -811,22 +811,31 @@ def main():
         #print('timesteps', timesteps)
         #print('total # of iterations: ', np.sum(iters))
         #print('avg iterations per timestep: ', np.sum(iters)/timesteps)
-        e_discs = e_ests[1]
-        fig, axs = plt.subplots(3,1)
         timesteps = np.arange(0,timesteps,1)
-        axs[0].plot(timesteps, iters, label='CG Iterations')
-        axs[0].set_xlabel('#timesteps')
-        axs[0].legend()
-        axs[1].plot(timesteps, abs(np.asarray(e_discs)), label='|Discretization error|')
-        axs[1].set_xlabel('#timesteps')
-        axs[1].set_yscale('log')
-        axs[1].legend()
-        axs[2].plot(timesteps, e_discs, label='Discretization error')
-        axs[2].set_xlabel('#timesteps')
-        axs[2].legend()
-        #plt.show()
+        e_discs = np.asarray(e_ests[1])
+        e_iters = np.asarray(e_ests[0])
+        e_diffs = abs(e_discs) - abs(e_iters)
+
+        timesteps_ = timesteps[e_diffs!=0]
+        e_diffs = e_diffs[e_diffs!=0]
+        fig = plt.figure(figsize=(16,9))
+        axs = fig.add_subplot(111)
+        axs.scatter(timesteps_, e_diffs, marker='x', color = 'green', label='error evaluations')
+        axs.axhline(y=0, color='black', linestyle='--')
+        plt.legend()
+        #axs[0].plot(timesteps, iters, label='CG Iterations')
+        #axs[0].set_xlabel('#timesteps')
+        #axs[0].legend()
+        #axs[1].plot(timesteps, abs(np.asarray(e_discs)), label='|Discretization error|')
+        #axs[1].set_xlabel('#timesteps')
+        #axs[1].set_yscale('log')
+        #axs[1].legend()
+        #axs[2].plot(timesteps, e_discs, label='Discretization error')
+        #axs[2].set_xlabel('#timesteps')
+        #axs[2].legend()
+        plt.show()
     
-    if True:
+    if False:
         ###### export residual trajectories
         data = pd.DataFrame(res_trajectory)
         data.to_csv(r'out/samples.csv', index=False, header=True)
@@ -984,7 +993,7 @@ def disc_error_convtest():
         plt.xlabel('#nodes')
         plt.grid()
         plt.legend()
-        plt.show()
+        #plt.show()
 
 def iter_error_convtest():
     print('-------------------------------iter_error_convtest-------------------------------')
@@ -1135,7 +1144,7 @@ if __name__ == '__main__':
     #main
     if True:
         tolerance = None            #1e-12
-        initial_value_file = ''      #sys.argv[1]
+        initial_value_file = sys.argv[1]      #sys.argv[1]
         main()
 
     #disc_error_convtest
