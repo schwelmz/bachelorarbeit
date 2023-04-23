@@ -169,17 +169,26 @@ def monomial_interpolation(x,y,n):
     s = np.linalg.solve(A,y)
     return s
 
-def calc_root(x_used, e_diff, tdx, n_steps):
+def calc_root(x_used, e_diff, tdx, n_steps, order=2):
    #chebyshev nodes
-    x = np.asarray(x_used[-3:])
-    f_cheb = np.asarray(e_diff[-3:])
+    if order == 2:
+        x = np.asarray(x_used[-3:])
+        f_cheb = np.asarray(e_diff[-3:])
+    elif order == 1:
+        x = np.asarray(x_used[-2:])
+        f_cheb = np.asarray(e_diff[-2:])
 
     #newton interpolation
     xx = np.linspace(x[0], n_steps, n_steps)
     #coef = divided_diff(x,f_cheb)[0, :]
     #f_inter = newton_poly(coef, x, xx)
-    c,b,a = monomial_interpolation(x,f_cheb,2)
-    f_inter = c +b*xx + a*xx**2
+    if order == 2:
+        c,b,a = monomial_interpolation(x,f_cheb,2)
+        f_inter = c +b*xx + a*xx**2
+    elif order == 1:
+        c,b = monomial_interpolation(x,f_cheb,1)
+        f_inter = c + b*xx
+
 
     #calculate roots
     #[c0,c1,c2] = coef
@@ -187,34 +196,43 @@ def calc_root(x_used, e_diff, tdx, n_steps):
     #c = c0 - c1*x0 + c2*x0*x1   #p(x) = c + b*x + a*x²
     #b = c1-c2*x0-c2*x1
     #a = c2
-    if (b**2-4*a*c) >= 0:
-        root1 = (-b+np.sqrt(b**2-4*a*c))/(2*a)
-        root2 = (-b-np.sqrt(b**2-4*a*c))/(2*a)
-    else:
-        root1 = float('NaN')
-        root2 = float('NaN')
-    
-    if root1 > tdx and root2 > tdx:
-        if abs(root1 - tdx) < abs(root2 - tdx):
-            root = root1
+    if order == 2:
+        if (b**2-4*a*c) >= 0:
+            root1 = (-b+np.sqrt(b**2-4*a*c))/(2*a)
+            root2 = (-b-np.sqrt(b**2-4*a*c))/(2*a)
         else:
+            root1 = float('NaN')
+            root2 = float('NaN')
+        #pick root    
+        if root1 > tdx and root2 > tdx:
+            if abs(root1 - tdx) < abs(root2 - tdx):
+                root = root1
+            else:
+                root = root2
+        elif root1 > tdx:
+            root = root1
+        elif root2 > tdx:
             root = root2
-    elif root1 > tdx:
-        root = root1
-    elif root2 > tdx:
-        root = root2
-    else:
-        root = float('NaN')
+        else:
+            root = float('NaN')
+
+    elif order == 1:
+        root = -c/b
+        #pick root
+        if root < tdx:
+            root = float('NaN')
+
+
 
     #plots 
-    #plt.plot(x_used, e_diff, color='blue')
-    #plt.plot(xx,f_inter, color='blue',linestyle='--')
-    #plt.scatter(x,f_cheb, marker='x', color='red')
-    #plt.scatter(root,0,color='red')
-    #plt.axhline(y=0, linestyle='--', color='black')
-    #plt.xlim(0, n_steps)
-    #plt.ylim(-1.5e-8, 1.5e-8)
-    #plt.pause(0.2)
+    plt.plot(x_used, e_diff, color='blue')
+    plt.plot(xx,f_inter, color='blue',linestyle='--')
+    plt.scatter(x,f_cheb, marker='x', color='red')
+    plt.scatter(root,0,color='red')
+    plt.axhline(y=0, linestyle='--', color='black')
+    plt.xlim(0, n_steps)
+    plt.ylim(-1.5e-8, 1.5e-8)
+    plt.pause(0.2)
 
     return root
 
@@ -566,8 +584,8 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
                 e_diffs_upper.append( abs( sample1[-1]) - abs(sample0[-1]) )
                 t_steps_used.append(i)
                 #interpolation and root calculation
-                root_lower = calc_root(t_steps_used, e_diffs_lower, i, n_steps)
-                root_upper = calc_root(t_steps_used, e_diffs_upper, i, n_steps)
+                root_lower = calc_root(t_steps_used, e_diffs_lower, i, n_steps, order=1)
+                root_upper = calc_root(t_steps_used, e_diffs_upper, i, n_steps, order=1)
                 #check if roots are real numbers
                 upper = False
                 lower = False
@@ -590,6 +608,8 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
                     root_old = root_upper_old
                 #calculate the root diff
                 root_diff = abs(root-root_old)
+                if root_diff < 500:
+                    free_steps = abs(root-i)//16
                 if root_diff < 100:
                     free_steps = abs(root-i)//8
                 elif root_diff < 10:
@@ -620,7 +640,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
         sample1s[i,:sample1.shape[0]]=sample1
 
         #plot
-        #plt.clf()
+        plt.clf()
 
         if not traj:
             result = Vmhn
@@ -818,7 +838,7 @@ def main():
 
         timesteps_ = timesteps[e_diffs!=0]
         e_diffs = e_diffs[e_diffs!=0]
-        fig = plt.figure(figsize=(16,9))
+        fig = plt.figure(figsize=(8,4.5))
         axs = fig.add_subplot(111)
         axs.scatter(timesteps_, e_diffs, marker='x', color = 'green', label='error evaluations')
         axs.axhline(y=0, color='black', linestyle='--')
