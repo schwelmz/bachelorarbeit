@@ -609,8 +609,6 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
                     root_old = root_upper_old
                 #calculate the root diff
                 root_diff = abs(root-root_old)
-                if root_diff < 500:
-                    free_steps = abs(root-i)//16
                 if root_diff < 100:
                     free_steps = abs(root-i)//8
                 elif root_diff < 10:
