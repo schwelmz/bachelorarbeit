@@ -225,14 +225,15 @@ def calc_root(x_used, e_diff, tdx, n_steps, order=2):
 
 
     #plots 
-    plt.plot(x_used, e_diff, color='blue')
-    plt.plot(xx,f_inter, color='blue',linestyle='--')
-    plt.scatter(x,f_cheb, marker='x', color='red')
-    plt.scatter(root,0,color='red')
-    plt.axhline(y=0, linestyle='--', color='black')
-    plt.xlim(0, n_steps)
-    plt.ylim(-1.5e-8, 1.5e-8)
-    plt.pause(0.2)
+    if False:
+        plt.plot(x_used, e_diff, color='blue')
+        plt.plot(xx,f_inter, color='blue',linestyle='--')
+        plt.scatter(x,f_cheb, marker='x', color='red')
+        plt.scatter(root,0,color='red')
+        plt.axhline(y=0, linestyle='--', color='black')
+        plt.xlim(0, n_steps)
+        plt.ylim(-1.5e-7, 1.5e-7)
+        plt.pause(0.2)
 
     return root
 
@@ -584,8 +585,8 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
                 e_diffs_upper.append( abs( sample1[-1]) - abs(sample0[-1]) )
                 t_steps_used.append(i)
                 #interpolation and root calculation
-                root_lower = calc_root(t_steps_used, e_diffs_lower, i, n_steps, order=1)
-                root_upper = calc_root(t_steps_used, e_diffs_upper, i, n_steps, order=1)
+                root_lower = calc_root(t_steps_used, e_diffs_lower, i, n_steps, order=2)
+                root_upper = calc_root(t_steps_used, e_diffs_upper, i, n_steps, order=2)
                 #check if roots are real numbers
                 upper = False
                 lower = False
@@ -640,7 +641,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
         sample1s[i,:sample1.shape[0]]=sample1
 
         #plot
-        plt.clf()
+        #plt.clf()
 
         if not traj:
             result = Vmhn
@@ -814,7 +815,7 @@ def main():
     fig = plt.figure()
 
     ###### plot the transmembrane voltage
-    if True:
+    if False:
         ax = fig.add_subplot(111)
         ax.plot(xs, trajectory[::-step_stride, :, 0].T)
         for idx,line in enumerate(ax.lines): line.set_color((cs[idx], 0.5, 0.5))
@@ -826,7 +827,7 @@ def main():
         plt.show()
 
     ####### plot CG iterations and Disc error over timesteps
-    if tolerance == None:
+    if tolerance == None and False:
         timesteps = (tend)/hts
         #print('timesteps', timesteps)
         #print('total # of iterations: ', np.sum(iters))
