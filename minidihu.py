@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from mycg import mycg
 import pandas as pd
 import math as m
+import time
 
 ############################################################################################
 # auxiliary methods
@@ -528,6 +529,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
     e_diffs_lower = []
     e_diffs_upper = []
     t_steps_used = []
+    switches = []
     roots_lower = [float('NaN')]
     roots_upper = [float('NaN')]
     root_lower_old = float('NaN')
@@ -560,6 +562,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
             maxit_old = iters
         if iters != maxit_old:
             print('\nat timestep tdx=', i,'CGiters switch from', maxit_old, 'to',iters)
+            switches.append(i)
             k = 10
             e_diffs_lower = []
             e_diffs_upper = []
@@ -610,11 +613,11 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
                 #calculate the root diff
                 root_diff = abs(root-root_old)
                 if root_diff < 100:
-                    free_steps = abs(root-i)//8
+                    free_steps = abs(root-i)//16
                 elif root_diff < 10:
-                    free_steps = abs(root-i)//4
+                    free_steps = abs(root-i)//8
                 elif root_diff < 1:
-                    free_steps = abs(root-i)//2
+                    free_steps = abs(root-i)//4
                 #perform cg with maxits for free_steps
                 if free_steps > 10:
                     maxit = iters
@@ -647,7 +650,7 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
             result.append(Vmhn)
         
     print('\ndone! errors calculated: ', counter, 'times')
-    return np.asarray(result), np.asarray(iters_list), [e_iters, e_discs], res_trajectory, [sample0s, sample1s] # cast list to array if we store the trajectory
+    return np.asarray(result), np.asarray(iters_list), [e_iters, e_discs], res_trajectory, [sample0s, sample1s], switches # cast list to array if we store the trajectory
 
 def strang_step_1H_1CN_FE(Vmhn0, rhs, t, ht, maxiter, convcontrol, **kwargs):
     # unpack rhs for each component
@@ -659,7 +662,7 @@ def strang_step_1H_1CN_FE(Vmhn0, rhs, t, ht, maxiter, convcontrol, **kwargs):
     Vmhn, iters, e_ests, residuals, sample1, sample2 = crank_nicolson_FE_step(Vmhn, system_matrices_expl_impl, t, ht, maxiter, convcontrol, **kwargs)
     # 1/2 interval for reaction term with Heun
     Vmhn = heun_step(Vmhn, rhs_reaction, t+ht/2, ht/2)
-    return Vmhn, iters, e_ests, residuals, sample1, sample2 
+    return Vmhn, iters, e_ests, residuals, sample1, sample2
 
 def strang_1H_1CN_FE(Vmhn, rhs0, system_matrices_expl_impl, t0, t1, hts, maxit=1000, eps=1e-10, traj=False, error_est=None):
     return stepper(strang_step_1H_1CN_FE, Vmhn, (rhs0, system_matrices_expl_impl), t0, t1, hts, error_est=error_est, maxit=maxit, eps=eps, traj=traj)
@@ -720,7 +723,7 @@ def iter_error_est(u0,u1,z,x,hx,ht,prefactor):
 
 def main():
     print('-------------------------------main-------------------------------')
-    tend = float(sys.argv[2])
+    #tend = float(sys.argv[2])
     hts = float(sys.argv[3])
     if len(sys.argv) > 4:
         ht0 = hts / int(sys.argv[4])
@@ -788,7 +791,7 @@ def main():
     )
 
     # reuse CN code by replacing the implicit and explicit system matrices
-    trajectory, iters, e_ests, res_trajectory, samples= strang_1H_1CN_FE(
+    trajectory, iters, e_ests, res_trajectory, samples, switches= strang_1H_1CN_FE(
         Vmhn0,
         rhs_hodgkin_huxley,
         (ie_sys_expl, ie_sys_impl),
@@ -810,7 +813,7 @@ def main():
     time_steps = trajectory.shape[0]
     step_stride = 40
     cs = np.linspace(0,1, time_steps // step_stride + 1)
-    fig = plt.figure()
+    #fig = plt.figure()
 
     ###### plot the transmembrane voltage
     if False:
@@ -852,6 +855,68 @@ def main():
         #axs[2].plot(timesteps, e_discs, label='Discretization error')
         #axs[2].set_xlabel('#timesteps')
         #axs[2].legend()
+        plt.show()
+
+    #plot error difference and evaluations over timesteps
+    if False:
+        fig, axs = plt.subplots(2,1, gridspec_kw={'height_ratios':[5,1]}, figsize=[16,10])
+        ntsteps = int((tend)/hts)
+        timesteps = np.arange(0,ntsteps,1)
+        e_discs = np.asarray(samples[1])
+        e_iters = np.asarray(samples[0])
+        e_discs_1 = []
+        e_discs_2 = []
+        e_iters_1 = []
+        e_iters_2 = []
+        for i in range(ntsteps):
+            e_discs_i = e_discs[i,:]
+            e_discs_i = e_discs_i[e_discs_i!=0]
+            if e_discs_i.shape[0] > 1:
+                e_discs_1.append(e_discs_i[-1])
+                e_discs_2.append(e_discs_i[-2])
+            else:
+                e_discs_1.append(0)
+                e_discs_2.append(0)
+            e_iters_i = e_iters[i,:]
+            e_iters_i = e_iters_i[e_iters_i!=0]
+            if e_iters_i.shape[0] > 1:
+                e_iters_1.append(e_iters_i[-1])
+                e_iters_2.append(e_iters_i[-2])
+            else:
+                e_iters_1.append(0)
+                e_iters_2.append(0)
+        e_iters_1 = np.asarray(e_iters_1)
+        e_iters_2 = np.asarray(e_iters_2)
+        e_discs_1 = np.asarray(e_discs_1)
+        e_discs_2 = np.asarray(e_discs_2)
+        e_diffs_1 =abs(e_discs_1)-abs(e_iters_1)
+        e_diffs_2 =abs(e_discs_2)-abs(e_iters_2)
+
+        timesteps_ = timesteps[e_diffs_1 != 0]
+        h_timesteps_ = timesteps_[1:]-timesteps_[:-1]
+        e_diffs_1 = e_diffs_1[e_diffs_1 != 0]
+        e_diffs_2 = e_diffs_2[e_diffs_2 != 0]
+        axs[0].plot(timesteps_, e_diffs_1, color = 'orange', label='error diff. at last CG iter.')
+        axs[0].plot(timesteps_, e_diffs_2, color = 'blue', label='error diff. at 2nd last CG iter.')
+        axs[0].axhline(y=0, linestyle = '--', color='black')
+        axs[0].set_ylim(-2e-7,2e-7)
+        axs[0].grid()
+        axs[0].legend(fontsize=16)
+        axs[0].set_xlim(0,ntsteps)
+        axs[0].tick_params(axis='both', which='major', labelsize=14)
+        axs[0].set_xticks([])
+        for tdx in timesteps_:
+            axs[1].axvline(x=tdx,color = 'black')
+            if tdx in switches:
+                axs[1].axvline(x=tdx,color = 'lime', linewidth=4)
+        axs[1].plot(timesteps_[:-1], h_timesteps_, color='magenta')
+        axs[1].set_xlim(0,ntsteps)
+        #axs[1].axis('off')
+        axs[1].set_yscale('log')
+        axs[1].set_xlabel('time steps',fontsize=14)
+        axs[1].set_ylabel('skipped steps',fontsize=14)
+        axs[1].tick_params(axis='both', which='major', labelsize=14)
+        fig.tight_layout()
         plt.show()
     
     if False:
@@ -1162,9 +1227,20 @@ def iter_error_convtest():
 if __name__ == '__main__':
     #main
     if True:
+        for tend in [2.7, 5, 7.5, 20]:
+            print(f"--- simulation time ---{tend}")
+            tolerance = None            #1e-12
+            initial_value_file = ''      #sys.argv[1]
+            start_time = time.time()
+            main()
+            print(f"--- time taken ---{time.time() - start_time}")
+
+    if False:
+        tend = 20
         tolerance = None            #1e-12
-        initial_value_file = sys.argv[1]      #sys.argv[1]
+        initial_value_file = ''      #sys.argv[1]
         main()
+
 
     #disc_error_convtest
     if False:
