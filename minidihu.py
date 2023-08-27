@@ -588,8 +588,8 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
                 e_diffs_upper.append( abs( sample1[-1]) - abs(sample0[-1]) )
                 t_steps_used.append(i)
                 #interpolation and root calculation
-                root_lower = calc_root(t_steps_used, e_diffs_lower, i, n_steps, order=2)
-                root_upper = calc_root(t_steps_used, e_diffs_upper, i, n_steps, order=2)
+                root_lower = calc_root(t_steps_used, e_diffs_lower, i, n_steps, order=1)
+                root_upper = calc_root(t_steps_used, e_diffs_upper, i, n_steps, order=1)
                 #check if roots are real numbers
                 upper = False
                 lower = False
@@ -612,12 +612,14 @@ def stepper(integator, Vmhn0, rhs, t0, t1, ht, traj=False, **kwargs):
                     root_old = root_upper_old
                 #calculate the root diff
                 root_diff = abs(root-root_old)
-                if root_diff < 100:
-                    free_steps = abs(root-i)//16
-                elif root_diff < 10:
-                    free_steps = abs(root-i)//8
-                elif root_diff < 1:
-                    free_steps = abs(root-i)//4
+                if root_diff < R4:
+                    free_steps = abs(root-i)//c4
+                if root_diff < R3:
+                    free_steps = abs(root-i)//c3
+                elif root_diff < R2:
+                    free_steps = abs(root-i)//c2
+                elif root_diff < R1:
+                    free_steps = abs(root-i)//c1
                 #perform cg with maxits for free_steps
                 if free_steps > 10:
                     maxit = iters
@@ -807,7 +809,11 @@ def main():
     ######## plot trajectories
     # indices: trajectory[time_index, point alog x-axis, variable]
     out_stride = 1
-    np.save("out/out_trajectories.npy",trajectory[::out_stride, :, :])
+    #np.save(f"out/error_evals/out_trajectories_{R3}{R2}{R1}_{c3}{c2}{c1}.npy",trajectory[::out_stride, :, :])
+    #np.save(f"out/error_evals/out_iters_{R3}{R2}{R1}_{c3}{c2}{c1}.npy",iters)
+    #np.save(f"out/error_evals/out_e_ests_{R3}{R2}{R1}_{c3}{c2}{c1}.npy",e_ests)
+    #np.save(f"out/error_evals/out_samples_{R3}{R2}{R1}_{c3}{c2}{c1}.npy",samples)
+    #np.save(f"out/error_evals/out_switches_{R3}{R2}{R1}_{c3}{c2}{c1}.npy",switches)
     #print('Voltage range in the last timestep:')
     #print(f"  V: {np.min(trajectory[-1][:,0]):>+.2e} -- {np.max(trajectory[-1][:,0]):>+.2e}")
     time_steps = trajectory.shape[0]
@@ -858,7 +864,7 @@ def main():
         plt.show()
 
     #plot error difference and evaluations over timesteps
-    if False:
+    if True:
         fig, axs = plt.subplots(2,1, gridspec_kw={'height_ratios':[5,1]}, figsize=[16,10])
         ntsteps = int((tend)/hts)
         timesteps = np.arange(0,ntsteps,1)
@@ -899,7 +905,7 @@ def main():
         axs[0].plot(timesteps_, e_diffs_1, color = 'orange', label='error diff. at last CG iter.')
         axs[0].plot(timesteps_, e_diffs_2, color = 'blue', label='error diff. at 2nd last CG iter.')
         axs[0].axhline(y=0, linestyle = '--', color='black')
-        axs[0].set_ylim(-2e-7,2e-7)
+        #axs[0].set_ylim(-2e-7,2e-7)
         axs[0].grid()
         axs[0].legend(fontsize=16)
         axs[0].set_xlim(0,ntsteps)
@@ -909,7 +915,7 @@ def main():
             axs[1].axvline(x=tdx,color = 'black')
             if tdx in switches:
                 axs[1].axvline(x=tdx,color = 'lime', linewidth=4)
-        axs[1].plot(timesteps_[:-1], h_timesteps_, color='magenta')
+        #axs[1].plot(timesteps_[:-1], h_timesteps_, color='magenta')
         axs[1].set_xlim(0,ntsteps)
         #axs[1].axis('off')
         axs[1].set_yscale('log')
@@ -917,7 +923,7 @@ def main():
         axs[1].set_ylabel('skipped steps',fontsize=14)
         axs[1].tick_params(axis='both', which='major', labelsize=14)
         fig.tight_layout()
-        plt.show()
+        plt.savefig(f"out/error_evals/error_evals_{R4}{R3}{R2}{R1}_{c4}{c3}{c2}{c1}.png", format='png')
     
     if False:
         ###### export residual trajectories
@@ -1226,7 +1232,7 @@ def iter_error_convtest():
 
 if __name__ == '__main__':
     #main
-    if True:
+    if False:
         for tend in [2.7, 5, 7.5, 20]:
             print(f"--- simulation time ---{tend}")
             tolerance = None            #1e-12
@@ -1235,11 +1241,19 @@ if __name__ == '__main__':
             main()
             print(f"--- time taken ---{time.time() - start_time}")
 
-    if False:
-        tend = 20
+    if True:
+        tend = 7.2
         tolerance = None            #1e-12
-        initial_value_file = ''      #sys.argv[1]
-        main()
+        initial_value_file = sys.argv[1]
+        R = [[100,10,1],[100,10,1],[100,10,1],[50,10,1]]
+        c = [[8,4,2],[4,2,3/2],[16,8,4],[8,4,2]]
+        for i in range(1):
+            #R3,R2,R1 = R[i]
+            #c3,c2,c1 = c[i]
+            R4 = 500; R3 = 100; R2 = 10; R1 = 1
+            c4 = 16; c3 = 8; c2 = 4; c1 = 2
+            print(f'Test setting: R3={R3}, R2={R2}, R1={R1}, c3={c3}, c2={c2}, c1={c1}')
+            main()
 
 
     #disc_error_convtest
